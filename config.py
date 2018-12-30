@@ -1,0 +1,23 @@
+config = \
+{
+    "name" : "dqn",
+    "logfile" : "tmp/log.txt",
+
+    "env_name" : "Breakout-v0",
+
+    "batch_size" : 1,
+    "frame_w" : 80,
+    "frame_h" : 80,
+
+    "learn_rate" : 0.00025,
+    "gamma" : 0.99,
+
+
+    "init_epsilon" : 1.,
+    "final_epsilon" : 0.1,
+
+    "observe_frames" : 100,
+    "anneal_frames" : 50,
+    "replay_memory_size" : 100,
+    "" : 0,
+}

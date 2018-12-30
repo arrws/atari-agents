@@ -1,365 +1,92 @@
-
-import tensorflow as tf
 import numpy as np
-import gym
-from gym import envs
-import cv2
+import random
 
-class DQNetwork(object):
-
-    def __init__(self, frame_size, no_actions, learn_rate, network):
-        # WEIGHTS
-        self.W_conv1 = self.weight_variable([8, 8, 4, 16]) # 20x20x16
-        self.b_conv1 = self.bias_variable([16])
-
-        self.W_conv2 = self.weight_variable([4, 4, 16, 32]) # 10x10x32
-        self.b_conv2 = self.bias_variable([32])
-
-        self.W_fc1 = self.weight_variable([10*10*32, 256])
-        self.b_fc1 = self.bias_variable([256])
-
-        self.W_fc2 = self.weight_variable([256, no_actions])
-        self.b_fc2 = self.bias_variable([no_actions])
-
-        # INPUT
-        self.s = tf.placeholder(tf.float32, [None, frame_size, frame_size, 4]) # 4 stacked frames
-        self.a = tf.placeholder(tf.float32, [None, no_actions]) # actions
-        self.y = tf.placeholder(tf.float32, [None]) # target q function
-
-        # LAYERS
-        h_conv1 = tf.nn.relu(self.conv2d(self.s, self.W_conv1, 4, "SAME") + self.b_conv1)
-        h_conv2 = tf.nn.relu(self.conv2d(h_conv1, self.W_conv2, 2, "SAME") + self.b_conv2)
-
-        h_flat = tf.reshape(h_conv2, [-1, 10*10*32])
-        h_fc1 = tf.nn.relu(tf.matmul(h_flat, self.W_fc1) + self.b_fc1)
-
-        # result layer
-        self.q = tf.matmul(h_fc1, self.W_fc2) + self.b_fc2 # q action values
-
-        # gradient step
-        self.q_value = tf.reduce_sum(tf.multiply(self.q, self.a), reduction_indices=1)
-        self.loss = tf.reduce_mean(tf.square(self.y - self.q_value))
-
-        global_step = tf.Variable(0, name='global_step', trainable=False)
-        self.optimizer = tf.train.AdamOptimizer(1e-6).minimize(self.loss, global_step=global_step)
-        # self.optimizer = tf.train.RMSPropOptimizer(learning_rate=0.00025, decay=0.9, momentum=0.95, epsilon=0.01).minimize(self.loss)
-
-        self.saver = tf.train.Saver(max_to_keep = 3)
-
-        # param assignment ops only for target network
-        if network != None:
-            self.copy_ops = []
-            self.copy_ops.append(self.W_conv1.assign(network.W_conv1))
-            self.copy_ops.append(self.b_conv1.assign(network.b_conv1))
-            self.copy_ops.append(self.W_conv2.assign(network.W_conv2))
-            self.copy_ops.append(self.b_conv2.assign(network.b_conv2))
-            self.copy_ops.append(self.W_fc1.assign(network.W_fc1))
-            self.copy_ops.append(self.b_fc1.assign(network.b_fc1))
-            self.copy_ops.append(self.W_fc2.assign(network.W_fc2))
-            self.copy_ops.append(self.b_fc2.assign(network.b_fc2))
-
-    # def __init__(self, frame_size, no_actions, learn_rate, network):
-    #
-    #     # WEIGHTS
-    #     self.W_conv1 = self.weight_variable([8, 8, 4, 32]) # 20x20x32
-    #     self.b_conv1 = self.bias_variable([32])
-    #
-    #     self.W_conv2 = self.weight_variable([4, 4, 32, 64]) # 9x9x64
-    #     self.b_conv2 = self.bias_variable([64])
-    #
-    #     self.W_conv3 = self.weight_variable([3, 3, 64, 64]) # 7x7x64
-    #     self.b_conv3 = self.bias_variable([64])
-    #
-    #     self.W_fc1 = self.weight_variable([7*7*64, 512]) # 512
-    #     self.b_fc1 = self.bias_variable([512])
-    #
-    #     self.W_fc2 = self.weight_variable([512, no_actions])
-    #     self.b_fc2 = self.bias_variable([no_actions])
-    #
-    #     # INPUT
-    #     self.s = tf.placeholder(tf.float32, [None, frame_size, frame_size, 4]) # 4 stacked frames
-    #     self.a = tf.placeholder(tf.float32, [None, no_actions]) # actions
-    #     self.y = tf.placeholder(tf.float32, [None]) # target q function
-    #
-    #     # LAYERS
-    #     h_conv1 = tf.nn.relu(self.conv2d(self.s, self.W_conv1, 4, "SAME") + self.b_conv1)
-    #     h_conv2 = tf.nn.relu(self.conv2d(h_conv1, self.W_conv2, 2, "VALID") + self.b_conv2)
-    #     h_conv3 = tf.nn.relu(self.conv2d(h_conv2, self.W_conv3, 1, "VALID") + self.b_conv3)
-    #
-    #     h_flat = tf.reshape(h_conv3, [-1, 7*7*64])
-    #     h_fc1 = tf.nn.relu(tf.matmul(h_flat, self.W_fc1) + self.b_fc1)
-    #
-    #     # result layer
-    #     self.q = tf.matmul(h_fc1, self.W_fc2) + self.b_fc2 # q action values
-    #
-    #     # gradient step
-    #     self.q_value = tf.reduce_sum(tf.multiply(self.q, self.a), reduction_indices=1)
-    #     self.loss = tf.reduce_mean(tf.square(self.y - self.q_value))
-    #
-    #     global_step = tf.Variable(0, name='global_step', trainable=False)
-    #     # self.optimizer = tf.train.AdamOptimizer(learn_rate).minimize(self.loss, global_step=global_step)
-    #     self.optimizer = tf.train.RMSPropOptimizer(learning_rate=0.00025, decay=0.9, momentum=0.95, epsilon=0.01).minimize(self.loss)
-    #
-    #     self.saver = tf.train.Saver(max_to_keep = 3)
-    #
-    #     # param assignment ops only for target network
-    #     if network != None:
-    #         self.copy_ops = []
-    #         self.copy_ops.append(self.W_conv1.assign(network.W_conv1))
-    #         self.copy_ops.append(self.b_conv1.assign(network.b_conv1))
-    #         self.copy_ops.append(self.W_conv2.assign(network.W_conv2))
-    #         self.copy_ops.append(self.b_conv2.assign(network.b_conv2))
-    #         self.copy_ops.append(self.W_conv3.assign(network.W_conv3))
-    #         self.copy_ops.append(self.b_conv3.assign(network.b_conv3))
-    #         self.copy_ops.append(self.W_fc1.assign(network.W_fc1))
-    #         self.copy_ops.append(self.b_fc1.assign(network.b_fc1))
-    #         self.copy_ops.append(self.W_fc2.assign(network.W_fc2))
-    #         self.copy_ops.append(self.b_fc2.assign(network.b_fc2))
+from config import *
 
 
-    def weight_variable(self, shape):
-        initial = tf.truncated_normal(shape, stddev = 0.01)
-        return tf.Variable(initial)
+# Logger Class for printing
 
-    def bias_variable(self, shape):
-        initial = tf.constant(0.01, shape = shape)
-        return tf.Variable(initial)
-
-    def conv2d(self, x, W, stride, pad):
-        return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = pad)
-
-    # def max_pool(self, x):
-    #     return tf.nn.max_pool(x, ksize = [1, 2, 2, 1], strides = [1, 1, 1, 1], padding = "VALID")
-
-    def evaluate(self, sess, state):
-        return self.q.eval(session = sess, feed_dict = {self.s: state})
-
-    def train(self, sess, action_list, state_list, target_reward_list):
-        sess.run(self.optimizer, feed_dict = {self.a: action_list,
-                                         self.s: state_list,
-                                         self.y: target_reward_list})
-
-    def copy(self, sess, network):
-        sess.run(self.copy_ops)
-        # verify
-        q_w_fc1 = self.W_fc1.eval(session = sess)
-        t_w_fc1 = network.W_fc1.eval(session = sess)
-        if np.array_equal(q_w_fc1, t_w_fc1):
-            print ("Nice! target network inherited parameter correctly\n")
-
-
-
-class StepCounter():
+class Logger:
     def __init__(self):
-        self.step_counter = 0
-        self.max_thread_step = 999999999
-    def plus(self):
-        self.step_counter += 1
-    def get(self):
-        return self.step_counter
-    def get_max_step(self):
-        return self.max_thread_step
-    def set(self, x):
-        self.step_counter = x
+        self.data = dict()
 
-# no short ep
-# class BreakoutWrapper():
-#     def __init__(self):
-#         self.name = 'Breakout-v0'
-#         self.env = gym.make(self.name)
-#         self.game_offset = 1
-#         self.no_actions = 3
-#         self.lives = 5 #info.get('ale.lives')
-#         print("valid actions:", self.no_actions, self.env.env.get_action_meanings(),'\n')
-#
-#     def step(self, action_index):
-#         f, r, done, info = self.env.step(action_index + self.game_offset)
-#         r = np.clip(r, -1, 1)
-#         if self.lives > info.get('ale.lives'):
-#             self.lives = info.get('ale.lives')
-#             _,_,_,_ = self.env.step(self.game_offset)
-#             r = -1
-#         return [f, r, done]
-#
-#     def render(self):
-#         self.env.render()
-#
-#     def reset(self):
-#         f = self.env.reset()
-#         _,_,_,_ = self.env.step(self.game_offset) # force ball spawn
-#         self.lives = 5 #info.get('ale.lives')
-#         return f
-#
-#     def preprocess(self, f):
-#         f = f[35:-15,:] # cut unnacessary borders
-#         f = f[::2, ::2] # resize to  80x80
-#         f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-#         _, f = cv2.threshold(f, 1, 255, cv2.THRESH_BINARY) # black white it
-#         return f
+    def store(self, **kwargs):
+        for k,v in kwargs.items():
+            if not(k in self.data.keys()):
+                self.data[k] = []
+            self.data[k].append(v)
 
-# neg reward
-# class BreakoutWrapper():
-#     def __init__(self):
-#         self.name = 'Breakout-v0'
-#         self.env = gym.make(self.name)
-#         self.game_offset = 1
-#         self.no_actions = 3
-#         self.lives = 5
-#         print("valid actions:", self.no_actions, self.env.env.get_action_meanings(),'\n')
-#
-#     def step(self, action_index):
-#         f, r, done, info = self.env.step(action_index + self.game_offset)
-#         r = np.clip(r, -1, 1)
-#         if self.lives > info.get('ale.lives'):
-#             r=-1
-#             done = True
-#         return [f, r, done]
-#
-#     def render(self):
-#         self.env.render()
-#
-#     def reset(self):
-#         self.lives = 5
-#         f = self.env.reset()
-#         _,_,_,_ = self.env.step(self.game_offset) # force ball spawn
-#         return f
-#
-#     def preprocess(self, f):
-#         f = f[35:-15,:] # cut unnacessary borders
-#         f = f[::2, ::2] # resize to  80x80
-#         f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-#         _, f = cv2.threshold(f, 1, 255, cv2.THRESH_BINARY) # black white it
-#         return f
+    def update(self, **kwargs):
+        for k,v in kwargs.items():
+            if not(k in self.data.keys()):
+                self.data[k] = 0
+            self.data[k] += v
 
-# no neg rewards
-class BreakoutWrapper():
+    def log(self, key, val=None, with_min_and_max=False, average_only=False):
+        if val is not None:
+            print(key,'\t',val)
+        else:
+
+            stats = self.get_stats(self.data[key])
+
+            print(key + '\tAvg\t', stats[0])
+            if not(average_only):
+                print('\tStd\t', stats[1])
+            if with_min_and_max:
+                print('\tMn/Mx\t', stats[3], '\t', stats[2])
+        self.data[key] = []
+
+    def get_stats(self, x):
+        mean = np.sum(x) / len(x)
+        std = np.sqrt(np.sum(x-mean)**2 / len(x))
+        return [mean, std, np.max(x), np.min(x)]
+
+
+
+# Buffer Class for storing replay experience
+
+class Buffer():
     def __init__(self):
-        self.name = 'Breakout-v0'
-        self.env = gym.make(self.name)
-        self.game_offset = 1
-        self.no_actions = 3
-        self.lives = 5
-        print("valid actions:", self.no_actions, self.env.env.get_action_meanings(),'\n')
+        self.s = []
+        self.a = []
+        self.r = []
+        self.s2 = []
+        self.done = []
 
-    def step(self, action_index):
-        f, r, done, info = self.env.step(action_index + self.game_offset)
-        r = np.clip(r, 0, 1)
-        if self.lives > info.get('ale.lives'):
-            done = True
-        return [f, r, done]
+    def remember_transition(self, t):
+        # transition ~ (state, action, reward, result_state, done)
+        self.s.append(t[0])
+        self.a.append(t[1])
+        self.r.append(t[2])
+        self.s2.append(t[3])
+        self.done.append(t[4])
 
-    def render(self):
-        self.env.render()
-
-    def reset(self):
-        self.lives = 5
-        f = self.env.reset()
-        _,_,_,_ = self.env.step(self.game_offset) # force ball spawn
-        return f
-
-    def preprocess(self, f):
-        f = f[35:-15,:] # cut unnacessary borders
-        f = f[::2, ::2] # resize to  80x80
-        f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-        _, f = cv2.threshold(f, 1, 255, cv2.THRESH_BINARY) # black white it
-        return f
-
-class PongWrapper():
-    def __init__(self):
-        self.name = 'Pong-v0'
-        self.env = gym.make(self.name)
-        self.game_offset = 1
-        self.no_actions = 3
-        print("valid actions:", self.no_actions, self.env.env.get_action_meanings(),'\n')
-
-    def step(self, action_index):
-        f, r, done, info = self.env.step(action_index + self.game_offset)
-        r = np.clip(r, -1, 1)
-        if r==-1:
-            done = True
-        return [f, r, done]
-
-    def render(self):
-        self.env.render()
-
-    def reset(self):
-        self.env.reset()
-        for _ in range(19):
-            f,_,_,_ = self.env.step(self.game_offset)
-        return f
-
-    def preprocess(self, f):
-        f = f[35:-15,:] # cut unnacessary borders
-        f = f[::2, ::2] # resize to  80x80
-        f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-        _, f = cv2.threshold(f, 100, 255, cv2.THRESH_BINARY ) # black white it
-        return f
+        if len(self.s) > config["replay_memory_size"]:
+            self.s.pop(0)
+            self.a.pop(0)
+            self.r.pop(0)
+            self.s2.pop(0)
+            self.done.pop(0)
 
 
-def separe(x):
-    logfile = open("tmp/log.txt","r")
-    file = []
-    for i in range(x):
-        file.append(open("tmp/log_"+str(i)+".txt","a"))
-    line =  logfile.readline()
-    while line:
-        a = int(line[line.find("THREAD")+7])
-        print(line[a]+"  "+line)
-        file[a].write(line)
-        file[a].flush()
-        line = logfile.readline()
-    for i in range(x):
-        file[i].close()
+    def get_minibatch(self):
+        # sample a minibatch to train on
+        if len(self.s) > 10:
+            indexes = random.sample(range(5, len(self.s)), config["batch_size"])
+
+            s_batch = [np.dstack((self.s[i-3], self.s[i-2], self.s[i-1], self.s[i])) for i in indexes ] # initial states
+            a_batch = [self.a[i] for i in indexes] # actions taken
+            r_batch = [self.r[i] for i in indexes] # rewards received
+            s2_batch = [np.dstack((self.s2[i-3], self.s2[i-2],self.s2[i-1],self.s2[i])) for i in indexes ] # following state
+            return [indexes, s_batch, a_batch, r_batch, s2_batch]
+        return None
+
+    def get_last_transition(self):
+        t = np.dstack(self.s[-5:-1])
+        t = np.reshape(t, (-1, config["frame_w"], config["frame_h"], 4))
+        return t
+
+    def get_size(self):
+        return len(self.s)
 
 
-# class CartPoleWrapper():
-#     def __init__(self):
-#         self.name = 'CartPole-v0'
-#         self.env = gym.make(self.name)
-#         self.no_actions = 2
-#         print("valid actions:", self.no_actions," ['LEFT','RIGHT']\n")
-#
-#     def step(self, action_index):
-#         f, r, done, info = self.env.step(action_index)
-#         r = np.clip(r, -1, 1)
-#         if done:
-#             r = -1
-#         return [f, r, done]
-#
-#     def render(self):
-#         self.env.render()
-#
-#     def reset(self):
-#         f = self.env.reset()
-#         return f
-
-# class Game():
-#     def __init__(self, name):
-#         self.name = name
-#         self.env = gym.make(self.name)
-#         self.game_offset = 1
-#         self.no_actions = 3
-#         self.lives = 5
-#         print("valid actions:", self.no_actions, self.env.env.get_action_meanings(),'\n')
-#
-#     def step(self, action_index):
-#         f, r, done, info = self.env.step(action_index + self.game_offset)
-#         lives = info.get('ale.lives')
-#
-#         if self.lives > lives: # if ball dropped
-#             self.lives = lives
-#             r = -1
-#             if not done:
-#                 f,_,_,_ = self.env.step(self.game_offset) # force ball spawn
-#
-#         r = np.clip(r, -1, 1) # reward clipping
-#         return [f, r, done]
-#
-#     def render(self):
-#         self.env.render()
-#
-#     def reset(self):
-#         self.lives = 5
-#         self.env.reset()
-#         f,_,_,_ = self.env.step(self.game_offset) # force ball spawn
-#         return f
