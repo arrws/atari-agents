@@ -6,6 +6,20 @@ import sys
 from config import *
 
 
+class StepCounter():
+    def __init__(self):
+        self.step_counter = 0
+        self.max_thread_step = 999999999
+    def plus(self):
+        self.step_counter += 1
+    def get(self):
+        return self.step_counter
+    def get_max_step(self):
+        return self.max_thread_step
+    def set(self, x):
+        self.step_counter = x
+
+
 def save_gif(frames, name='test'):
     imageio.mimsave(name+'.gif', frames, format='GIF', duration=0.03)
 
@@ -68,19 +82,33 @@ class Logger:
 
 class Buffer():
     def __init__(self):
+        self.reset()
+
+    def reset(self, keep_recent=False):
+        if keep_recent:
+            self.s = self.s[-5:]
+            self.a = self.a[-5:]
+            self.r = self.r[-5:]
+            self.s2 = self.s2[-5:]
+            self.done = self.done[-5:]
+            self.y = self.y[-5:]
+            return
         self.s = []
         self.a = []
         self.r = []
         self.s2 = []
         self.done = []
+        self.y = []
 
-    def remember_transition(self, t):
+    def remember_transition(self, t, y=None):
         # transition ~ (state, action, reward, result_state, done)
         self.s.append(t[0])
         self.a.append(t[1])
         self.r.append(t[2])
         self.s2.append(t[3])
         self.done.append(t[4])
+        if y:
+            self.y.append(y)
 
         if len(self.s) > config["replay_memory_size"]:
             self.s.pop(0)
@@ -100,6 +128,13 @@ class Buffer():
             r_batch = [self.r[i] for i in indexes] # rewards received
             s2_batch = [np.dstack((self.s2[i-3], self.s2[i-2],self.s2[i-1],self.s2[i])) for i in indexes ] # following state
             return [indexes, s_batch, a_batch, r_batch, s2_batch]
+        return None
+
+    def get_inorder_minibatch(self):
+        if len(self.s) > 10:
+            s_batch = [np.dstack((self.s[i-3], self.s[i-2], self.s[i-1], self.s[i])) for i in range(5, self.get_size()) ]
+            l = len(s_batch)
+            return [s_batch, self.a[-l:], self.y[-l:]]
         return None
 
     def get_last_transition(self):

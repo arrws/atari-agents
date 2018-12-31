@@ -21,4 +21,6 @@ config = \
     "replay_memory_size" : 100,
     "save_freq" : 10,
     "target_update_freq" : 30,
+    "force_update_freq" : 50,
+    "no_threads" : 2,
 }
