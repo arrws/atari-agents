@@ -10,6 +10,19 @@ def save_gif(frames, name='test'):
     imageio.mimsave(name+'.gif', frames, format='GIF', duration=0.03)
 
 
+def play_random(sess, env, buff):
+    print("\nFilling Replay Memory...")
+    s = env.reset()
+    for step in range(config["observe_frames"]):
+        a = env.get_random_action()
+        s2, r, done = env.step(a)
+        buff.remember_transition((s, a, r, s2, done))
+        s = s2
+        if step % 1000 == 0:
+            print("STEP %d" % (step))
+        if done:
+            s = env.reset()
+
 
 # Logger Class for printing
 
@@ -26,22 +39,23 @@ class Logger:
     def update(self, **kwargs):
         for k,v in kwargs.items():
             if not(k in self.data.keys()):
-                self.data[k] = 0
+                self.data[k] = v
             self.data[k] += v
 
-    def log(self, key, val=None, with_min_and_max=False, average_only=False):
+    def log(self, key, val=None, with_min_and_max=False, average_only=False, value_only=False):
         if val is not None:
             print(key,'\t',val)
         else:
-
-            stats = self.get_stats(self.data[key])
-
-            print(key + '\tAvg\t', stats[0])
-            if not(average_only):
-                print('\tStd\t', stats[1])
-            if with_min_and_max:
-                print('\tMn/Mx\t', stats[3], '\t', stats[2])
-        self.data[key] = []
+            if value_only:
+                print(key,'\t', self.data[key])
+            else:
+                stats = self.get_stats(self.data[key])
+                print(key,'\t', stats[0])
+                if not(average_only):
+                    print('\tStd\t', stats[1])
+                if with_min_and_max:
+                    print('\tMn/Mx\t', stats[3], '\t', stats[2])
+            del self.data[key]
 
     def get_stats(self, x):
         mean = np.sum(x) / len(x)

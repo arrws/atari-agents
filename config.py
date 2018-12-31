@@ -19,5 +19,6 @@ config = \
     "observe_frames" : 100,
     "anneal_frames" : 50,
     "replay_memory_size" : 100,
-    "" : 0,
+    "save_freq" : 10,
+    "target_update_freq" : 30,
 }
