@@ -44,9 +44,10 @@ def run(index, sess, net, target_net, lock, STEP, env):
             s_batch = buff.get_last_transition()
             p = sess.run(net.policy, feed_dict = {net.s: s_batch})[0]
             idx = np.random.choice(env.no_actions, p=p)
-
             a = np.zeros([env.no_actions])
             a[idx] = 1
+
+            logger.update( EpPolicy = p )
 
 
         # interact with the environment
@@ -60,6 +61,8 @@ def run(index, sess, net, target_net, lock, STEP, env):
             s_batch = buff.get_last_transition()
             v = sess.run(target_net.value, feed_dict = {target_net.s: s_batch})[0]
             y = r + config["gamma"] * v[0]
+
+            logger.update( EpValue = v )
 
         buff.remember_transition((s, a, r, s2, done), y)
         s = s2
@@ -89,20 +92,38 @@ def run(index, sess, net, target_net, lock, STEP, env):
         # printing and logging
         if done:
             s = env.reset()
-            logger.log('THREAD', index)
+
+            data = logger.get_data(['EpSteps', 'EpScore', 'EpPolicy', 'EpValue', 'ActionDist'])
+            print("THREAD "+str(index)+" results:")
             logger.log('GlobalStep', STEP.get())
             logger.log('ThreadStep', step)
             logger.log('Episode', episode)
             logger.log('EpSteps', value_only=True)
             logger.log('EpScore', value_only=True)
+            logger.log('EpPolicy', value_only=True)
+            logger.log('EpValue', value_only=True)
             logger.log('ActionDist', value_only=True)
             logger.log('Epsilon', epsilon)
             print("")
 
+            logger.store( CumSteps = data['EpSteps'],
+                          CumScore = data['EpScore'],
+                          CumPolicy = data['EpPolicy'],
+                          CumValue = data['EpValue'],
+                          CumActions = data['ActionDist'],
+                         )
+
             episode += 1
 
             if episode % config['save_freq'] == 0:
-                save_gif(buff.get_recent_frames(), "vid_"+str(index)+"_"+str(episode))
+                print("THREAD "+str(index)+" STATS per "+str(config['save_freq'])+" episodes:")
+                logger.log('CumSteps', with_min_and_max=True)
+                logger.log('CumScore', with_min_and_max=True)
+                logger.log('CumPolicy', average_only=True)
+                logger.log('CumValue', average_only=True)
+                logger.log('CumActions', average_only=True)
+
+                # save_gif(buff.get_recent_frames(), "vid_"+str(index)+"_"+str(episode))
 
                 # save_path = net.saver.save(sess, "tmp/model.ckpt", global_step = step)
                 # print("progress logged and model saved in file:", save_path, "\n")
@@ -148,8 +169,8 @@ def main():
     while True:
         now = time.time()
 
-        # for game in envs:
-            # game.render()
+        # for env in envs:
+        #     env.render()
 
         if STEP.get() >= updates*step_target_update  and now-prev > 10:
             prev = now

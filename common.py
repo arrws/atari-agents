@@ -57,8 +57,12 @@ class Logger:
                     print('\tMn/Mx\t', stats[3], '\t', stats[2])
             del self.data[key]
 
+    def get_data(self, keys):
+        t = { k: self.data[k] for k in keys }
+        return t
+
     def get_stats(self, x):
-        mean = np.sum(x) / len(x)
+        mean = np.sum(x, axis=0) / len(x)
         std = np.sqrt(np.sum(x-mean)**2 / len(x))
         return [mean, std, np.max(x), np.min(x)]
 

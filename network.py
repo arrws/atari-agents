@@ -163,7 +163,7 @@ class AC_Network(object):
             out = np.random.randn(*shape).astype(np.float32)
             out *= std / np.sqrt(np.square(out).sum(axis=0, keepdims=True))
             return tf.constant(out)
-    return _initializer
+        return _initializer
 
     def weight_variable(self, shape):
         initial = tf.truncated_normal(shape, stddev = 0.01)
