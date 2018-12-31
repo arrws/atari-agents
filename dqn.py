@@ -7,6 +7,17 @@ from network import *
 from wrappers import *
 from config import *
 
+def play_random(sess, env, buff):
+    s = env.reset()
+    for step in range(config["observe_frames"]):
+        a = env.get_random_action()
+        s2, r, done = env.step(a)
+        buff.remember_transition((s, a, r, s2, done))
+        s = s2
+        if step % 1000 == 0:
+            print("STEP %d" % (step))
+        if done:
+            s = env.reset()
 
 def main():
     start_time = time.time()
@@ -22,20 +33,10 @@ def main():
 
     # restore_network(sess, net)
 
-    def play_random(sess):
-        s = env.reset()
-        for step in range(config["observe_frames"]): # to fill the replay memory
-            a = env.get_random_action()
-            s2, r, done = env.step(a)
-            buff.remember_transition((s, a, r, s2, done))
-            s = s2
-            if step % 1000 == 0:
-                print("STEP %d" % (step))
-            if done:
-                s = env.reset()
 
     print("\nFill Replay Memory")
-    play_random(sess) # fill replay memory
+    play_random(sess, env, buff) # fill replay memory
+    print(buff.get_size())
 
 
 
@@ -111,6 +112,8 @@ def main():
             steps = 0.
             score = 0.
             episodes += 1
+
+            # save_gif(buff.get_recent_frames(), "vid_"+str(episodes))
 
             # logfile = open("tmp/log.txt","a")
             if episodes % 10 == 0:

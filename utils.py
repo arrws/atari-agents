@@ -1,7 +1,14 @@
 import numpy as np
 import random
+import imageio
+import sys
 
 from config import *
+
+
+def save_gif(frames, name='test'):
+    imageio.mimsave(name+'.gif', frames, format='GIF', duration=0.03)
+
 
 
 # Logger Class for printing
@@ -88,5 +95,9 @@ class Buffer():
 
     def get_size(self):
         return len(self.s)
+
+    def get_recent_frames(self):
+        t = np.array(self.s[-100:-1])
+        return t
 
 

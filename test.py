@@ -40,7 +40,8 @@ for t in range(1000):
         print("Episode finished at {} timestep".format(t+1))
         game.reset()
 
-# frames = np.array(frames)
-# imageio.mimsave('t.gif', frames, format='GIF', duration=0.03)
-# print(frames.shape)
-# print(sys.getsizeof(frames))
+def make_gif(frames):
+    frames = np.array(frames)
+    imageio.mimsave('t.gif', frames, format='GIF', duration=0.03)
+    print(frames.shape)
+    print(sys.getsizeof(frames))

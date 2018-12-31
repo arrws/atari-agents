@@ -129,5 +129,3 @@ class CartPoleWrapper():
     def close(self):
         self.env.close()
 
-
-
