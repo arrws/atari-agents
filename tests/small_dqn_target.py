@@ -116,3 +116,4 @@ while True:
     if episode%100 == 0:
         print("EPISODE:",episode,"SCORE:", cumulative_score/100)
         cumulative_score = 0
+

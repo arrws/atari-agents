@@ -15,8 +15,8 @@ Deep Q-Learning with Asynchronous Agents
 """
 
 
-def run(index, sess, net, target_net, lock, step_counter, env):
-    print ("THREAD %d\n" % (index))
+def run(index, sess, net, target_net, lock, STEP, env):
+    print ("THREAD %d" % (index))
     time.sleep(3*index)
 
     logger = Logger()
@@ -31,9 +31,9 @@ def run(index, sess, net, target_net, lock, step_counter, env):
         buff.remember_transition((s, env.get_random_action(), 0, s, False), y=0.1)
 
 
-    print("\nSTART TRAINNING")
-    while step_counter.get() < step_counter.get_max_step():
-        step_counter.plus()
+    # trainning
+    while STEP.get() < STEP.get_max_step():
+        STEP.plus()
         step += 1
 
         # get action
@@ -54,6 +54,7 @@ def run(index, sess, net, target_net, lock, step_counter, env):
         # interact with the environment
         s2, r, done = env.step(a)
 
+        # compute target return
         y = 0
         if done:
             y = r
@@ -71,7 +72,6 @@ def run(index, sess, net, target_net, lock, step_counter, env):
             epsilon -= (config['init_epsilon'] - config['final_epsilon']) / config['anneal_frames']
 
 
-        # printing and logging
         logger.update( EpSteps = 1,
                        EpScore = r,
                        QvalueAvg = qavg,
@@ -79,7 +79,7 @@ def run(index, sess, net, target_net, lock, step_counter, env):
                        ActionDist = a)
 
 
-        # TRAIN STEP
+        # NETWORK TRAIN STEP
         if done or step % config['force_update_freq'] == 0:
             minibatch = buff.get_inorder_minibatch()
             if minibatch:
@@ -90,10 +90,11 @@ def run(index, sess, net, target_net, lock, step_counter, env):
                 buff.reset(keep_recent=True)
 
 
+        # printing and logging
         if done:
             s = env.reset()
             logger.log('THREAD', index)
-            logger.log('GlobalStep', step_counter.get())
+            logger.log('GlobalStep', STEP.get())
             logger.log('ThreadStep', step)
             logger.log('Episode', episode)
             logger.log('EpSteps', value_only=True)
@@ -107,27 +108,25 @@ def run(index, sess, net, target_net, lock, step_counter, env):
             episode += 1
 
             if episode % config['save_freq'] == 0:
-                save_gif(buff.get_recent_frames(), "vid_"+str(episode))
-                logger.log('Time', time.time()-start_time)
+                save_gif(buff.get_recent_frames(), "vid_"+str(index)+"_"+str(episode))
 
                 # save_path = net.saver.save(sess, "tmp/model.ckpt", global_step = step)
                 # print("progress logged and model saved in file:", save_path, "\n")
 
                 print("")
 
-    print ("THREAD %d has quit\n" % index)
+    print ("THREAD %d has quit" % index)
 
 
 def main():
     start_time = time.time()
+    STEP = StepCounter()
 
     envs = []
     for i in range(config["no_threads"]):
         env = get_environment(config["env_name"])
         envs.append(env)
 
-    lock = threading.Lock()
-    step_counter = StepCounter()
 
     net = Network(env.no_actions)
     target_net = Network(env.no_actions, network=net)
@@ -138,31 +137,33 @@ def main():
     # restore_network(sess, net)
     target_net.copy(sess, net)
 
+
     # spawn slave threads
+    print("\nSpawning Threads...")
+    lock = threading.Lock()
     threads = list()
     for i in range(config["no_threads"]):
-        t = threading.Thread(target=run, args=(i, sess, net, target_net, lock, step_counter, envs[i]))
+        t = threading.Thread(target=run, args=(i, sess, net, target_net, lock, STEP, envs[i]))
         threads.append(t)
+        threads[-1].start()
 
-    print("\nStarting Threads...")
-    for t in threads:
-        t.start()
+    prev = 0
+    updates = 0
+    step_target_update = 20*config['target_update_freq']
 
-
-    last_update = 0
-    update_num = 1
-    while "I" != "dead":
+    while True:
         now = time.time()
+
         # for game in envs:
             # game.render()
 
-        if step_counter.get() >= update_num*10*config['target_update_freq'] and now-last_update > 10:
-            last_update = now
-            update_num += 1
-            print ("GLOBAL STEP %d | UPDATING TARGET NETWORK\n" % (step_counter.get()))
+        if STEP.get() >= updates*step_target_update  and now-prev > 10:
+            prev = now
+            updates += 1
             target_net.copy(sess, net)
+            print ("GLOBAL STEP %d updated target network" % (STEP.get()))
 
-    # Wait for all of them to finish
+    # Wait for all threads to finish
     for t in threads:
         t.join()
     sess.close()
