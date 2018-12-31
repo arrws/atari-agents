@@ -24,20 +24,6 @@ def save_gif(frames, name='test'):
     imageio.mimsave(name+'.gif', frames, format='GIF', duration=0.03)
 
 
-def play_random(sess, env, buff):
-    print("\nFilling Replay Memory...")
-    s = env.reset()
-    for step in range(config["observe_frames"]):
-        a = env.get_random_action()
-        s2, r, done = env.step(a)
-        buff.remember_transition((s, a, r, s2, done))
-        s = s2
-        if step % 1000 == 0:
-            print("STEP %d" % (step))
-        if done:
-            s = env.reset()
-
-
 # Logger Class for printing
 
 class Logger:

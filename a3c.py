@@ -10,7 +10,7 @@ from config import *
 
 
 """
-Deep Q-Learning with asynchronous agents
+Actor Critic with asynchronous updates
 
 """
 
@@ -42,13 +42,11 @@ def run(index, sess, net, target_net, lock, STEP, env):
             a = env.get_random_action()
         else:
             s_batch = buff.get_last_transition()
-            q = sess.run(net.q, feed_dict = {net.s: s_batch})[0]
+            p = sess.run(net.policy, feed_dict = {net.s: s_batch})[0]
+            idx = np.random.choice(env.no_actions, p=p)
 
             a = np.zeros([env.no_actions])
-
-            a[np.argmax(q)] = 1
-            qmax = np.max(q)
-            qavg = np.average(q)
+            a[idx] = 1
 
 
         # interact with the environment
@@ -60,8 +58,8 @@ def run(index, sess, net, target_net, lock, STEP, env):
             y = r
         else:
             s_batch = buff.get_last_transition()
-            q = sess.run(target_net.q, feed_dict = {target_net.s: s_batch})[0]
-            y = r + config["gamma"] * np.max(q)
+            v = sess.run(target_net.value, feed_dict = {target_net.s: s_batch})[0]
+            y = r + config["gamma"] * v[0]
 
         buff.remember_transition((s, a, r, s2, done), y)
         s = s2
@@ -74,8 +72,6 @@ def run(index, sess, net, target_net, lock, STEP, env):
 
         logger.update( EpSteps = 1,
                        EpScore = r,
-                       QvalueAvg = qavg,
-                       QvalueMax = qmax,
                        ActionDist = a)
 
 
@@ -99,8 +95,6 @@ def run(index, sess, net, target_net, lock, STEP, env):
             logger.log('Episode', episode)
             logger.log('EpSteps', value_only=True)
             logger.log('EpScore', value_only=True)
-            logger.log('QvalueAvg', value_only=True)
-            logger.log('QvalueMax', value_only=True)
             logger.log('ActionDist', value_only=True)
             logger.log('Epsilon', epsilon)
             print("")
@@ -128,8 +122,8 @@ def main():
         envs.append(env)
 
 
-    net = Network(env.no_actions)
-    target_net = Network(env.no_actions, network=net)
+    net = AC_Network(env.no_actions)
+    target_net = AC_Network(env.no_actions, network=net)
 
     sess = tf.InteractiveSession()
     sess.run(tf.initialize_all_variables())

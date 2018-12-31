@@ -22,5 +22,11 @@ config = \
     "save_freq" : 10,
     "target_update_freq" : 30,
     "force_update_freq" : 50,
-    "no_threads" : 2,
+    "no_threads" : 1,
+
+
+    "loss_v" : 0.5,
+    "loss_entropy" : 0.01,
+
+
 }

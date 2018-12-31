@@ -7,10 +7,12 @@ from network import *
 from wrappers import *
 from config import *
 
-"""
-basic Deep Q-Learning with Replay Memory
 
 """
+Deep Q-Learning with Replay Memory and Target Network
+
+"""
+
 
 def main():
     start_time = time.time()
@@ -21,20 +23,37 @@ def main():
     buff = Buffer()
 
     net = Network(env.no_actions)
+    target_net = Network(env.no_actions, network=net)
+
     sess = tf.InteractiveSession()
     sess.run(tf.initialize_all_variables())
 
     # restore_network(sess, net)
 
     # fill replay memory
-    play_random(sess, env, buff)
+    def play_random():
+        s = env.reset()
+        for step in range(config["observe_frames"]):
+            a = env.get_random_action()
+            s2, r, done = env.step(a)
+            buff.remember_transition((s, a, r, s2, done))
+            s = s2
+            if step % 1000 == 0:
+                print("STEP %d" % (step))
+            if done:
+                s = env.reset()
+
+    print("\nFilling Replay Memory...")
+    play_random()
 
 
     def train():
         minibatch = buff.get_minibatch()
         if minibatch:
             [indexes, s_batch, a_batch, r_batch, s2_batch] = minibatch
-            q_batch = sess.run(net.q, feed_dict = { net.s: s2_batch })
+            q_batch = sess.run(target_net.q, feed_dict = { target_net.s: s2_batch })
+            # # without target
+            # q_batch = sess.run(net.q, feed_dict = { net.s: s2_batch })
 
             y_batch = []
             for i, index in enumerate(indexes):
@@ -83,6 +102,8 @@ def main():
         if epsilon > config['final_epsilon']:
             epsilon -= (config['init_epsilon'] - config['final_epsilon']) / config['anneal_frames']
 
+        if STEP % config['target_update_freq'] == 0:
+            target_net.copy(sess, net)
 
         train()
 
