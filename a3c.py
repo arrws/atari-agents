@@ -12,6 +12,8 @@ from config import *
 """
 Actor Critic with asynchronous updates
 
+BROKEN
+
 """
 
 
