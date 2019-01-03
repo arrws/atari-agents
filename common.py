@@ -90,15 +90,15 @@ class Buffer():
         self.done = []
         self.y = []
 
-    def remember_transition(self, t, y=None):
+    def remember_transition(self, t):
         # transition ~ (state, action, reward, result_state, done)
         self.s.append(t[0])
         self.a.append(t[1])
         self.r.append(t[2])
         self.s2.append(t[3])
         self.done.append(t[4])
-        if y:
-            self.y.append(y)
+        # if y:
+        #     self.y.append(y)
 
         if len(self.s) > config["replay_memory_size"]:
             self.s.pop(0)
@@ -124,7 +124,7 @@ class Buffer():
         if len(self.s) > 10:
             s_batch = [np.dstack((self.s[i-3], self.s[i-2], self.s[i-1], self.s[i])) for i in range(5, self.get_size()) ]
             l = len(s_batch)
-            return [s_batch, self.a[-l:], self.y[-l:]]
+            return [s_batch, self.a[-l:], self.r[-l:]]
         return None
 
     def get_last_transition(self):

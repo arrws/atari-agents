@@ -15,9 +15,13 @@ Actor Critic with asynchronous updates
 """
 
 
-def run(index, sess, net, target_net, lock, STEP, env):
+def run(index, sess, trainer, lock, STEP, env):
     print ("THREAD %d" % (index))
     time.sleep(3*index)
+
+    name = "worker_"+str(index)
+    local_net = AC_Network(env.no_actions, name, trainer)
+    update_local_ops = update_target_graph('global', name)
 
     logger = Logger()
     buff = Buffer()
@@ -28,7 +32,7 @@ def run(index, sess, net, target_net, lock, STEP, env):
 
     s = env.reset()
     for i in range(5): # dummy fill
-        buff.remember_transition((s, env.get_random_action(), 0, s, False), y=0.1)
+        buff.remember_transition((s, env.get_random_action(), 0, s, False))
 
 
     # trainning
@@ -42,7 +46,7 @@ def run(index, sess, net, target_net, lock, STEP, env):
             a = env.get_random_action()
         else:
             s_batch = buff.get_last_transition()
-            p = sess.run(net.policy, feed_dict = {net.s: s_batch})[0]
+            p = sess.run(local_net.policy, feed_dict = {local_net.s: s_batch})[0]
             idx = np.random.choice(env.no_actions, p=p)
             a = np.zeros([env.no_actions])
             a[idx] = 1
@@ -52,26 +56,13 @@ def run(index, sess, net, target_net, lock, STEP, env):
 
         # interact with the environment
         s2, r, done = env.step(a)
-
-        # compute target return
-        y = 0
-        if done:
-            y = r
-        else:
-            s_batch = buff.get_last_transition()
-            v = sess.run(target_net.value, feed_dict = {target_net.s: s_batch})[0]
-            y = r + config["gamma"] * v[0]
-
-            logger.update( EpValue = v )
-
-        buff.remember_transition((s, a, r, s2, done), y)
+        buff.remember_transition((s, a, r, s2, done))
         s = s2
 
 
         # update epsilon
         if epsilon > config['final_epsilon']:
             epsilon -= (config['init_epsilon'] - config['final_epsilon']) / config['anneal_frames']
-
 
         logger.update( EpSteps = 1,
                        EpScore = r,
@@ -82,11 +73,31 @@ def run(index, sess, net, target_net, lock, STEP, env):
         if done or step % config['force_update_freq'] == 0:
             minibatch = buff.get_inorder_minibatch()
             if minibatch:
-                s_batch, a_batch, y_batch = minibatch
-                sess.run(net.optimizer, feed_dict = { net.a: a_batch,
-                                                      net.s: s_batch,
-                                                      net.y: y_batch })
+                s_batch, a_batch, r_batch = minibatch
+
+                v = r
+                if not done: # bootstrap
+                    v = sess.run(local_net.value, feed_dict = {local_net.s: s_batch})[0]
+
+                discounted_r_batch = discount(r_batch)
+                v_batch = np.asarray(v_batch.tolist() + [v])
+                adv_batch = r_batch - v_batch
+                discounted_adv_batch = discount(adv_batch)
+
+                result = sess.run([ net.value_loss,
+                                    net.policy_loss,
+                                    net.entropy,
+                                    net.grad_norms,
+                                    net.var_norms,
+                                    net.state_out,
+                                    net.apply_grads],
+                                    feed_dict = {   net.y: discounted_r_batch,
+                                                    net.s: s_batch,
+                                                    net.a: a_batch,
+                                                    net.advantages: discounted_adv_batch}
+                                  )
                 buff.reset(keep_recent=True)
+                sess.run(self.update_local_ops)
 
 
         # printing and logging
@@ -125,7 +136,7 @@ def run(index, sess, net, target_net, lock, STEP, env):
 
                 # save_gif(buff.get_recent_frames(), "vid_"+str(index)+"_"+str(episode))
 
-                # save_path = net.saver.save(sess, "tmp/model.ckpt", global_step = step)
+                # save_path = local_net.saver.save(sess, "tmp/model.ckpt", global_step = step)
                 # print("progress logged and model saved in file:", save_path, "\n")
 
                 print("")
@@ -143,14 +154,13 @@ def main():
         envs.append(env)
 
 
-    net = AC_Network(env.no_actions)
-    target_net = AC_Network(env.no_actions, network=net)
+    trainer = tf.train.AdamOptimizer(learning_rate=1e-4)
+    target_net = AC_Network(env.no_actions, 'global', None)
 
     sess = tf.InteractiveSession()
     sess.run(tf.initialize_all_variables())
 
     # restore_network(sess, net)
-    target_net.copy(sess, net)
 
 
     # spawn slave threads
@@ -158,25 +168,9 @@ def main():
     lock = threading.Lock()
     threads = list()
     for i in range(config["no_threads"]):
-        t = threading.Thread(target=run, args=(i, sess, net, target_net, lock, STEP, envs[i]))
+        t = threading.Thread(target=run, args=(i, sess, trainer, lock, STEP, envs[i]))
         threads.append(t)
         threads[-1].start()
-
-    prev = 0
-    updates = 0
-    step_target_update = 20*config['target_update_freq']
-
-    while True:
-        now = time.time()
-
-        # for env in envs:
-        #     env.render()
-
-        if STEP.get() >= updates*step_target_update  and now-prev > 10:
-            prev = now
-            updates += 1
-            target_net.copy(sess, net)
-            print ("GLOBAL STEP %d updated target network" % (STEP.get()))
 
     # Wait for all threads to finish
     for t in threads:
