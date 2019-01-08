@@ -1,9 +1,12 @@
-#Critic (value) monte-carlo prediction
-#Actor (policy) TD(0) for Advantage estimation
-
 import gym
 import tensorflow as tf
 import numpy as np
+
+
+""""""""""
+Actor-Critic [Monte-Carlo prediction and TD(0) for Advantage estimation]
+
+"""""""""
 
 
 class Buffer():
@@ -37,24 +40,25 @@ class Actor:
         self.env = env
         self.input_dim = len(env.observation_space.high)
         self.output_dim = env.action_space.n
-
         self.learning_rate = 0.01
-
 
         self.graph = tf.Graph()
         with self.graph.as_default():
             tf.set_random_seed(1234)
 
+            # layers params
             self.w = tf.Variable(tf.random_normal([self.input_dim, self.output_dim]))
             self.b = tf.Variable(tf.random_normal([self.output_dim]))
 
-            self.s = tf.placeholder("float", [None, self.input_dim])#State input
-            self.y = tf.placeholder("float") #Advantage input
-            self.a = tf.placeholder("float", [None, self.output_dim]) #Input action to return the probability associated with that action
+            # input placeholders
+            self.s = tf.placeholder("float", [None, self.input_dim])    # state
+            self.a = tf.placeholder("float", [None, self.output_dim])   # action
+            self.y = tf.placeholder("float")                            # advantage
 
+            # policy function
             self.policy = tf.nn.softmax(tf.matmul(self.s, self.w) + self.b)
             self.log_action_probability = tf.reduce_sum(self.a*tf.log(self.policy))
-            self.loss = -self.log_action_probability*self.y #Loss is score function times advantage
+            self.loss = -self.log_action_probability*self.y
 
             self.optim = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
@@ -92,9 +96,6 @@ class Actor:
                 ep_ret[i] += r
 
             s = s2
-
-        # for i in range(len(ep_ret)-2, 0, -1):
-        #     ep_ret[i] += ep_ret[i+1]
 
         buff.store(ep_s, ep_a, ep_r, ep_s2, ep_ret)
         return score
@@ -142,18 +143,21 @@ class Critic:
         with self.graph.as_default():
             tf.set_random_seed(1234)
 
+            # layers params
             self.w1 = tf.Variable(tf.random_normal([self.input_dim, self.n_hidden_1]))
             self.w2 = tf.Variable(tf.random_normal([self.n_hidden_1, 1]))
             self.b1 = tf.Variable(tf.random_normal([self.n_hidden_1]))
             self.b2 = tf.Variable(tf.random_normal([1]))
 
-            self.s = self.x = tf.placeholder("float", [None, self.input_dim])#State input
-            self.y = tf.placeholder("float") #Target return
+            # input placeholders
+            self.s = tf.placeholder("float", [None, self.input_dim])   # state
+            self.y = tf.placeholder("float")                           # return
 
+            # value function
             self.h = tf.nn.tanh( tf.add(tf.matmul(self.s, self.w1), self.b1) )
             self.value_pred = tf.matmul(self.h, self.w2) + self.b2
-
             self.loss = tf.reduce_mean(tf.pow(self.value_pred - self.y,2))
+
             self.optim = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
             init = tf.initialize_all_variables()
@@ -206,12 +210,10 @@ buff = Buffer()
 
 env = gym.make('CartPole-v0')
 env.seed(1234)
-
 no_episodes = 2
 
 actor = Actor(env)
 critic = Critic(env)
-
 
 def run():
     advs = []
@@ -239,5 +241,4 @@ def run():
             sum_score = 0
 
 run()
-
 

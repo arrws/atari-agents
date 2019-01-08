@@ -1,9 +1,13 @@
-#Critic (value) monte-carlo prediction
-#Actor (policy) TD(0) for Advantage estimation
-
 import gym
 import tensorflow as tf
 import numpy as np
+
+
+""""""""""
+Actor-Critic [Monte-Carlo prediction and TD(0) for Advantage estimation]
+with Joint Neural Network
+
+"""""""""
 
 
 class Buffer():
@@ -18,6 +22,7 @@ class Buffer():
         self.ret = []
 
     def store(self, s, a, r, s2, ret):
+        # store a transition to replay memory
         self.s.append(s)
         self.a.append(a)
         self.r.append(r)
@@ -28,6 +33,7 @@ class Buffer():
         return len(self.s)
 
     def get_last_episode(self):
+        # return last stored transition
         return self.s[-1], self.a[-1], self.r[-1], self.s2[-1], self.ret[-1]
 
 
@@ -37,41 +43,42 @@ class Network():
         self.input_dim = len(env.observation_space.high)
         self.output_dim = env.action_space.n
         self.learning_rate = 0.008
-        self.hidden_dim = 20
+        self.hidden_dim = 10
 
         self.graph = tf.Graph()
         with self.graph.as_default():
             tf.set_random_seed(1234)
 
-            self.s = tf.placeholder("float", [None, self.input_dim])#State input
-            self.a = tf.placeholder("float", [None, self.output_dim]) #Input action to return the probability associated with that action
+            # input placeholders
+            self.s = tf.placeholder("float", [None, self.input_dim])    # state
+            self.a = tf.placeholder("float", [None, self.output_dim])   # action
+            self.y = tf.placeholder("float")                            # return
+            self.adv = tf.placeholder("float")                          # advantage
 
+            # joint layers
             self.w = tf.Variable(tf.random_normal([self.input_dim, self.hidden_dim]))
             self.b = tf.Variable(tf.random_normal([self.hidden_dim]))
+            self.h = tf.nn.tanh( tf.add(tf.matmul(self.s, self.w), self.b))
 
-            self.w_p = tf.Variable(tf.random_normal([self.hidden_dim, self.output_dim]))
-            self.b_p = tf.Variable(tf.random_normal([self.output_dim]))
-
+            # critic / value function
             self.w_v = tf.Variable(tf.random_normal([self.hidden_dim, 1]))
             self.b_v = tf.Variable(tf.random_normal([1]))
 
-            self.h = tf.nn.tanh( tf.add(tf.matmul(self.s, self.w), self.b))
-
-
-            # critic
-            self.y = tf.placeholder("float") #Target return
             self.value_pred = tf.matmul(self.h, self.w_v) + self.b_v
             self.v_loss = tf.reduce_mean(tf.pow(self.value_pred - self.y,2))
 
+            # actor / policy optimization
+            self.w_p = tf.Variable(tf.random_normal([self.hidden_dim, self.output_dim]))
+            self.b_p = tf.Variable(tf.random_normal([self.output_dim]))
 
-            # actor
-            self.adv = tf.placeholder("float") #Advantage input
             self.policy = tf.nn.softmax(tf.matmul(self.h, self.w_p) + self.b_p)
-            self.log_action_probability = tf.reduce_sum(self.a*tf.log(self.policy))
-            self.p_loss = -self.log_action_probability*self.adv #Loss is score function times advantage
+            self.log_action_probability = tf.reduce_sum(self.a *  tf.log(self.policy))
+            self.p_loss = -self.log_action_probability * self.adv
 
+            # optimizers
             self.p_optim = tf.train.AdamOptimizer(self.learning_rate).minimize(self.p_loss)
             self.v_optim = tf.train.AdamOptimizer(self.learning_rate).minimize(self.v_loss)
+
             self.init = tf.initialize_all_variables()
 
         self.sess = tf.Session(graph = self.graph)
@@ -208,14 +215,11 @@ buff = Buffer()
 
 env = gym.make('CartPole-v0')
 env.seed(1234)
-
 no_episodes = 2
 
 graph = Network(env)
-
 actor = Actor(env, graph)
 critic = Critic(env, graph)
-
 
 def run():
     advs = []
@@ -243,5 +247,4 @@ def run():
             sum_score = 0
 
 run()
-
 
