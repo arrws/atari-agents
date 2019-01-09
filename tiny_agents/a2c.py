@@ -14,6 +14,7 @@ class Buffer():
         self.reset()
 
     def reset(self):
+        # reset replay memory
         self.s = []
         self.a = []
         self.r = []
@@ -21,6 +22,7 @@ class Buffer():
         self.ret = []
 
     def store(self, s, a, r, s2, ret):
+        # save a transition in replay memory
         self.s.append(s)
         self.a.append(a)
         self.r.append(r)
@@ -30,7 +32,8 @@ class Buffer():
     def get_len(self):
         return len(self.s)
 
-    def get_last_episode(self):
+    def get_last_transition(self):
+        # returns the last stored transition
         return self.s[-1], self.a[-1], self.r[-1], self.s2[-1], self.ret[-1]
 
 
@@ -42,6 +45,7 @@ class Actor:
         self.output_dim = env.action_space.n
         self.learning_rate = 0.01
 
+        # Neural Network for Policy
         self.graph = tf.Graph()
         with self.graph.as_default():
             tf.set_random_seed(1234)
@@ -60,6 +64,7 @@ class Actor:
             self.log_action_probability = tf.reduce_sum(self.a*tf.log(self.policy))
             self.loss = -self.log_action_probability*self.y
 
+            # optimizer
             self.optim = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
             self.init = tf.initialize_all_variables()
@@ -94,7 +99,6 @@ class Actor:
             ep_ret.append(r)
             for i in range(len(ep_ret)-1):
                 ep_ret[i] += r
-
             s = s2
 
         buff.store(ep_s, ep_a, ep_r, ep_s2, ep_ret)
@@ -139,6 +143,7 @@ class Critic:
         self.num_epochs = 20
         self.batch_size = 170
 
+        # Neural Network for Value function
         self.graph = tf.Graph()
         with self.graph.as_default():
             tf.set_random_seed(1234)
@@ -158,6 +163,7 @@ class Critic:
             self.value_pred = tf.matmul(self.h, self.w2) + self.b2
             self.loss = tf.reduce_mean(tf.pow(self.value_pred - self.y,2))
 
+            # optimizer
             self.optim = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
             init = tf.initialize_all_variables()
@@ -167,28 +173,28 @@ class Critic:
 
 
     def update_value_estimate(self):
+        # Monte Carlo prediction
         global buff
-        #Monte Carlo prediction
         batch_size = min(buff.get_len(), self.batch_size)
         for _ in range(self.num_epochs):
-            #Loop over all batches
+            # Loop over all batches
             for i in range( buff.get_len()//batch_size ):
                 batch_s, batch_y = self.get_next_batch(batch_size, buff.s, buff.ret)
-                #Fit training data using batch
+                # Fit training data using batch
                 self.sess.run(self.optim, feed_dict={self.s: batch_s, self.y: batch_y})
 
 
-    def get_adv(self, s_batch, r_batch, s2_batch):
+    def get_advantage(self, s_batch, r_batch, s2_batch):
         #Return TD(0) adv for particular state and action
         #Get value of current state
-        adv = []
+        advs = []
         for s, r, s2 in zip(s_batch, r_batch, s2_batch):
             s_value = self.sess.run(self.value_pred, feed_dict={self.s: s.reshape(1,4)})
             s2_value = self.sess.run(self.value_pred, feed_dict={self.s: s2.reshape(1,4)})
-            # TD(0) for advantage
+            # estimation with TD(0) for advantage
             advantage = r + self.discount * s2_value - s_value
-            adv.append(advantage)
-        return adv
+            advs.append(advantage)
+        return advs
 
 
     def get_next_batch(self, batch_size, states, returns):
@@ -223,8 +229,8 @@ def run():
         ep_score = actor.rollout_policy()
         sum_score += ep_score
 
-        ep_s, ep_a, ep_r, ep_s2, ep_ret = buff.get_last_episode()
-        advs.append( critic.get_adv(ep_s, ep_r, ep_s2) )
+        ep_s, ep_a, ep_r, ep_s2, ep_ret = buff.get_last_transition()
+        advs.append( critic.get_advantage(ep_s, ep_r, ep_s2) )
 
         if (i+1) % no_episodes == 0:
             avg_score = sum_score / no_episodes

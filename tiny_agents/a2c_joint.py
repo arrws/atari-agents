@@ -32,7 +32,7 @@ class Buffer():
     def get_len(self):
         return len(self.s)
 
-    def get_last_episode(self):
+    def get_last_transition(self):
         # return last stored transition
         return self.s[-1], self.a[-1], self.r[-1], self.s2[-1], self.ret[-1]
 
@@ -183,17 +183,17 @@ class Critic:
                 self.graph.sess.run(self.graph.v_optim, feed_dict={self.graph.s: batch_s, self.graph.y: batch_y})
 
 
-    def get_adv(self, s_batch, r_batch, s2_batch):
+    def get_advantage(self, s_batch, r_batch, s2_batch):
         #Return TD(0) adv for particular state and action
         #Get value of current state
-        adv = []
+        advs = []
         for s, r, s2 in zip(s_batch, r_batch, s2_batch):
             s_value = self.graph.sess.run(self.graph.value_pred, feed_dict={self.graph.s: s.reshape(1,4)})
             s2_value = self.graph.sess.run(self.graph.value_pred, feed_dict={self.graph.s: s2.reshape(1,4)})
             # TD(0) for advantage
             advantage = r + self.discount * s2_value - s_value
-            adv.append(advantage)
-        return adv
+            advs.append(advantage)
+        return advs
 
 
     def get_next_batch(self, batch_size, states, returns):
@@ -229,8 +229,8 @@ def run():
         ep_score = actor.rollout_policy()
         sum_score += ep_score
 
-        ep_s, ep_a, ep_r, ep_s2, ep_ret = buff.get_last_episode()
-        advs.append( critic.get_adv(ep_s, ep_r, ep_s2) )
+        ep_s, ep_a, ep_r, ep_s2, ep_ret = buff.get_last_transition()
+        advs.append( critic.get_advantage(ep_s, ep_r, ep_s2) )
 
         if (i+1) % no_episodes == 0:
             avg_score = sum_score / no_episodes
