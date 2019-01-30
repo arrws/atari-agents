@@ -14,6 +14,12 @@ def get_environment(name):
         return PongWrapper()
     return None
 
+def atari_preprocess(f):
+    f = f[35:-15,:] # cut unnacessary borders
+    f = f[::2, ::2] # resize to  80x80
+    f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
+    _, f = cv2.threshold(f, 1, 255, cv2.THRESH_BINARY) # black white it
+    return f
 
 class Wrapper():
     def __init__(self, name):
@@ -36,6 +42,8 @@ class Wrapper():
     def reset(self):
         pass
 
+    def preprocess(self):
+        pass
 
 class BreakoutWrapper(Wrapper):
     def __init__(self):
@@ -62,11 +70,8 @@ class BreakoutWrapper(Wrapper):
         return f
 
     def preprocess(self, f):
-        f = f[35:-15,:] # cut unnacessary borders
-        f = f[::2, ::2] # resize to  80x80
-        f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-        _, f = cv2.threshold(f, 1, 255, cv2.THRESH_BINARY) # black white it
-        return f
+        return atari_preprocess(f)
+
 
 class PongWrapper():
     def __init__(self):
@@ -81,9 +86,6 @@ class PongWrapper():
             done = True
         return [f, r, done]
 
-    def render(self):
-        self.env.render()
-
     def reset(self):
         self.env.reset()
         for _ in range(19):
@@ -91,11 +93,7 @@ class PongWrapper():
         return f
 
     def preprocess(self, f):
-        f = f[35:-15,:] # cut unnacessary borders
-        f = f[::2, ::2] # resize to  80x80
-        f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-        _, f = cv2.threshold(f, 100, 255, cv2.THRESH_BINARY ) # black white it
-        return f
+        return atari_preprocess(f)
 
 
 class CartPoleWrapper():
@@ -106,10 +104,6 @@ class CartPoleWrapper():
         print("initialized {}\nvalid actions: {} ['LEFT','RIGHT']\n".format(self.name, self.no_actions))
 
     def _preprocess_frame(self, f):
-        # f = f[35:-15,:] # cut unnacessary borders
-        # f = f[::2, ::2] # resize to  80x80
-        # f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) # grayscale it
-        # _, f = cv2.threshold(f, 1, 255, cv2.THRESH_BINARY) # black white it
         return f
 
     def step(self, a):

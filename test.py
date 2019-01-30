@@ -31,7 +31,6 @@ for t in range(1000):
 
     f, reward, done = game.step(action)
     frames.append(f)
-    # f = game.preprocess(f)
     # print(sys.getsizeof(frames))
     # toimage(f).show()
 
@@ -45,3 +44,4 @@ def make_gif(frames):
     imageio.mimsave('t.gif', frames, format='GIF', duration=0.03)
     print(frames.shape)
     print(sys.getsizeof(frames))
+
